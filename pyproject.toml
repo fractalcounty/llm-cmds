@@ -10,6 +10,7 @@ classifiers = [
 ]
 dependencies = [
     "llm",
+    "rich",
     "prompt_toolkit>=3.0.43",
     "pygments>=2.17.2",
 ]

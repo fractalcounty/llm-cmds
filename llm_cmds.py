@@ -1,14 +1,39 @@
 import click
 import llm
 import subprocess
-
+import json
+import platform
+import os
+import shutil
+from rich.console import Console
+from rich.panel import Panel
+from rich.json import JSON
 from prompt_toolkit.shortcuts import prompt
 from prompt_toolkit.lexers import PygmentsLexer
 from pygments.lexers.shell import BashLexer
+from pygments.styles import get_style_by_name
+from prompt_toolkit.styles import style_from_pygments_cls
 
+def safe_get(func, default='N/A'):
+    try:
+        return func()
+    except:
+        return default
+
+def get_system_info():
+    return {
+        'platform': safe_get(platform.platform),
+        'version': safe_get(platform.version),
+        'python_version': safe_get(platform.python_version),
+        'shell': safe_get(lambda: os.environ.get('SHELL', 'Unknown')),
+        'home_dir': safe_get(lambda: os.path.expanduser('~')),
+        'current_dir': safe_get(os.getcwd)
+    }
 
 SYSTEM_PROMPT = """
-You are a terminal command generator. Your task is to analyze the user's request carefully in a very concise manner, thinking through the steps required to achieve the desired outcome and any assumptions you make about the request. Provide your thoughts and the final command to be executed in JSON format, separating the chain of reasoning from the command via two JSON keys: "thoughts" (will not be shown to the user) and "command" (contents will be passed to subprocess.check_output() directly). Always format your response as a valid JSON object. Ensure proper escaping of special characters, especially quotes. For multiline content, use \\n to represent line breaks.
+You are a terminal command generator. Your task is to analyze the user's request carefully in a very concise manner, thinking through the steps required to achieve the desired outcome and any assumptions you make about the request. Consider all provided context about the user's system in your reasoning.
+
+Provide your thoughts and the final command to be executed in JSON format, separating the chain of reasoning from the command via two JSON keys: "thoughts" (will not be shown to the user) and "command" (contents will be passed to subprocess.check_output() directly). Always format your response as a valid JSON object. Ensure proper escaping of special characters, especially quotes. Use '\n' for multiline commands and whatnot.
 
 If the request is ambiguous, make the safest assumption. If the command is likely to fail, dangerous, harmful, or unclear, explain why in an echo command.
 
@@ -47,11 +72,26 @@ def register_commands(cli):
     @click.option("-m", "--model", default=None, help="Specify the model to use")
     @click.option("-s", "--system", help="Custom system prompt")
     @click.option("--key", help="API key to use")
-    def cmds(args, model, system, key):
+    @click.option("--think", is_flag=True, help="Show the LLM's thought process")
+    @click.option("--context", is_flag=True, help="Show the context passed to the LLM")
+    def cmds(args, model, system, key, think, context):
         """Generate and execute commands in your shell"""
         from llm.cli import get_default_model
 
-        prompt = " ".join(args)
+        console = Console()
+        user_prompt = " ".join(args)
+
+        system_info = get_system_info()
+        prompt_data = {
+            "context": system_info,
+            "request": {
+                "user": user_prompt
+            }
+        }
+
+        if context:
+            context_str = "\n".join(f"[bold yellow]{k}[/bold yellow]: {v}" for k, v in system_info.items())
+            console.print(Panel(context_str, title="Context", border_style="yellow", expand=False))
 
         model_id = model or get_default_model()
 
@@ -59,21 +99,64 @@ def register_commands(cli):
         if model_obj.needs_key:
             model_obj.key = llm.get_key(key, model_obj.needs_key, model_obj.key_env_var)
 
-        result = model_obj.prompt(prompt, system=system or SYSTEM_PROMPT)
+        result = model_obj.prompt(json.dumps(prompt_data), system=system or SYSTEM_PROMPT)
 
-        interactive_exec(str(result))
-
+        try:
+            parsed_result = json.loads(str(result))
+            if think:
+                thoughts = parsed_result.get("thoughts", "No thoughts provided")
+                console.print(Panel(thoughts, title="Thoughts", border_style="cyan"))
+            command = parsed_result.get("command", "")
+            if not command:
+                console.print("[bold red]Error:[/bold red] No command provided in the LLM output")
+                return
+            # console.print(Panel(Syntax(command, "bash", theme="monokai"), title="Generated Command", border_style="green"))
+            interactive_exec(command)
+        except json.JSONDecodeError:
+            console.print("[bold red]Error:[/bold red] Invalid JSON output from LLM")
+            if think:
+                console.print(Panel(str(result), title="Raw Output", border_style="red"))
 
 def interactive_exec(command):
+    console = Console()
+
+    pygments_style = style_from_pygments_cls(get_style_by_name('github-dark'))
+    
     if '\n' in command:
-        print("Multiline command - Meta-Enter or Esc Enter to execute")
-        edited_command = prompt("> ", default=command, lexer=PygmentsLexer(BashLexer), multiline=True)
-    else:
-        edited_command = prompt("> ", default=command, lexer=PygmentsLexer(BashLexer))
-    try:
-        output = subprocess.check_output(
-            edited_command, shell=True, stderr=subprocess.STDOUT
+        console.print("Multiline command - Meta-Enter or Esc Enter to execute")
+        edited_command = prompt(
+            [('class:prompt', "❯ ")],
+            default=command,
+            lexer=PygmentsLexer(BashLexer),
+            multiline=True,
+            style=pygments_style
         )
-        print(output.decode())
-    except subprocess.CalledProcessError as e:
-        print(f"Command failed with error (exit status {e.returncode}): {e.output.decode()}")
+    else:
+        edited_command = prompt(
+            [('class:prompt', "❯ ")],
+            default=command,
+            lexer=PygmentsLexer(BashLexer),
+            style=pygments_style
+        )
+    
+    try:
+        process = subprocess.Popen(
+            edited_command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
+        
+        for line in process.stdout:
+            console.print(line, end='')
+        
+        process.wait()
+        
+        if process.returncode != 0:
+            console.print(f"[bold red]Command failed with exit status {process.returncode}[/bold red]")
+    
+    except Exception as e:
+        console.print(f"[bold red]Error:[/bold red] {str(e)}")
