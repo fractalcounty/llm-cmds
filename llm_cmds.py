@@ -5,9 +5,12 @@ import json
 import platform
 import os
 import shutil
+import time
 from rich.console import Console
 from rich.panel import Panel
 from rich.json import JSON
+from rich.live import Live
+from rich.spinner import Spinner
 from prompt_toolkit.shortcuts import prompt
 from prompt_toolkit.lexers import PygmentsLexer
 from pygments.lexers.shell import BashLexer
@@ -99,23 +102,27 @@ def register_commands(cli):
         if model_obj.needs_key:
             model_obj.key = llm.get_key(key, model_obj.needs_key, model_obj.key_env_var)
 
-        result = model_obj.prompt(json.dumps(prompt_data), system=system or SYSTEM_PROMPT)
+        with console.status("[bold green]Thinking...[/bold green]", spinner="dots") as status:
+            result = model_obj.prompt(json.dumps(prompt_data), system=system or SYSTEM_PROMPT)
 
-        try:
-            parsed_result = json.loads(str(result))
-            if think:
-                thoughts = parsed_result.get("thoughts", "No thoughts provided")
-                console.print(Panel(thoughts, title="Thoughts", border_style="cyan"))
-            command = parsed_result.get("command", "")
-            if not command:
-                console.print("[bold red]Error:[/bold red] No command provided in the LLM output")
-                return
-            # console.print(Panel(Syntax(command, "bash", theme="monokai"), title="Generated Command", border_style="green"))
+            try:
+                parsed_result = json.loads(str(result))
+                if think:
+                    thoughts = parsed_result.get("thoughts", "No thoughts provided")
+                command = parsed_result.get("command", "")
+                if not command:
+                    raise ValueError("No command provided in the LLM output")
+            except json.JSONDecodeError:
+                raise ValueError("Invalid JSON output from LLM")
+
+        if think:
+            console.print(Panel(thoughts, title="Thoughts", border_style="cyan"))
+        
+        if command:
             interactive_exec(command)
-        except json.JSONDecodeError:
-            console.print("[bold red]Error:[/bold red] Invalid JSON output from LLM")
-            if think:
-                console.print(Panel(str(result), title="Raw Output", border_style="red"))
+        else:
+            console.print("[bold red]Error:[/bold red] No command was generated.")
+
 
 def interactive_exec(command):
     console = Console()
@@ -140,20 +147,22 @@ def interactive_exec(command):
         )
     
     try:
-        process = subprocess.Popen(
-            edited_command,
-            shell=True,
-            stdout=subprocess.PIPE,
-            stderr=subprocess.STDOUT,
-            text=True,
-            bufsize=1,
-            universal_newlines=True
-        )
-        
-        for line in process.stdout:
-            console.print(line, end='')
-        
-        process.wait()
+        with Live(Spinner("dots", text="Executing..."), refresh_per_second=10) as live:
+            process = subprocess.Popen(
+                edited_command,
+                shell=True,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.STDOUT,
+                text=True,
+                bufsize=1,
+                universal_newlines=True
+            )
+            
+            for line in process.stdout:
+                live.stop()
+                console.print(line, end='')
+            
+            process.wait()
         
         if process.returncode != 0:
             console.print(f"[bold red]Command failed with exit status {process.returncode}[/bold red]")
