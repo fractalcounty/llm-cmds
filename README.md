@@ -1,5 +1,5 @@
 # llm-cmds
-<img width="944" alt="SCR-20240826-dpcm" src="https://github.com/user-attachments/assets/5e62a358-4a76-499f-8b64-10ff45287dd6">
+<img width="944" alt="image" src="https://github.com/user-attachments/assets/b0398b99-53b7-4610-8635-f18af2922528">
 
 A WIP fork of [llm-cmd](https://github.com/simonw/llm-cmd) that allows you to use the [LLM](https://llm.datasette.io) CLI tool to generate and execute commands in your shell, but with various enhancements such as chain of thought reasoning and user environment context that can greatly improve results in certain scenarios. 
 
