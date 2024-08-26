@@ -123,43 +123,35 @@ def register_commands(cli):
 
 def interactive_exec(command):
     console = Console()
-
-    pygments_style = style_from_pygments_cls(get_style_by_name('github-dark'))
     
     if '\n' in command:
         console.print("Multiline command - Meta-Enter or Esc Enter to execute")
         edited_command = prompt(
-            [('class:prompt', "❯ ")],
+            "❯ ",
             default=command,
-            lexer=PygmentsLexer(BashLexer),
-            multiline=True,
-            style=pygments_style
+            multiline=True
         )
     else:
         edited_command = prompt(
-            [('class:prompt', "❯ ")],
-            default=command,
-            lexer=PygmentsLexer(BashLexer),
-            style=pygments_style
+            "❯ ",
+            default=command
         )
     
     try:
-        with Live(Spinner("dots", text="Executing..."), refresh_per_second=10) as live:
-            process = subprocess.Popen(
-                edited_command,
-                shell=True,
-                stdout=subprocess.PIPE,
-                stderr=subprocess.STDOUT,
-                text=True,
-                bufsize=1,
-                universal_newlines=True
-            )
+        process = subprocess.Popen(
+            edited_command,
+            shell=True,
+            stdout=subprocess.PIPE,
+            stderr=subprocess.STDOUT,
+            text=True,
+            bufsize=1,
+            universal_newlines=True
+        )
             
-            for line in process.stdout:
-                live.stop()
-                console.print(line, end='')
-            
-            process.wait()
+        for line in process.stdout:
+            console.print(line, end='', highlight=False)
+
+        process.wait()
         
         if process.returncode != 0:
             console.print(f"[bold red]Command failed with exit status {process.returncode}[/bold red]")
