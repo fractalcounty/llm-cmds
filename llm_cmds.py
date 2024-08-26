@@ -4,8 +4,6 @@ import subprocess
 import json
 import platform
 import os
-import shutil
-import time
 from rich.console import Console
 from rich.panel import Panel
 from rich.json import JSON
@@ -34,11 +32,11 @@ def get_system_info():
     }
 
 SYSTEM_PROMPT = """
-You are a terminal command generator. Your task is to analyze the user's request carefully in a very concise manner, thinking through the steps required to achieve the desired outcome and any assumptions you make about the request. Consider all provided context about the user's system in your reasoning.
+You are a terminal command generator. Your task is to analyze context about the user's system as well as the user's request, briefly thinking through the steps required to fulfill the request and any assumptions made about it. Then, generate a command that will achieve the desired outcome.
 
-Provide your thoughts and the final command to be executed in JSON format, separating the chain of reasoning from the command via two JSON keys: "thoughts" (will not be shown to the user) and "command" (contents will be passed to subprocess.check_output() directly). Always format your response as a valid JSON object. Ensure proper escaping of special characters, especially quotes. Use '\n' for multiline commands and whatnot.
+Always provide both your thought processs and the final generated command in valid JSON format, separating your chain of thought reasoning from the command via two JSON keys: "thoughts" (will not be shown to the user) and "command" (contents will be passed to subprocess.check_output() directly). Ensure proper escaping of special characters, especially quotes. Use '\n' for multiline commands and whatnot.
 
-If the request is ambiguous, make the safest assumption. If the command is likely to fail, dangerous, harmful, or unclear, explain why in an echo command.
+If the request is ambiguous, make the safest assumption. If the command is likely to fail, dangerous, harmful, or unclear, include the command and/or an explanation via an echo command or similar.
 
 Examples:
 
@@ -66,7 +64,6 @@ Examples:
 }
 </example>
 """.strip()
-
 
 @llm.hookimpl
 def register_commands(cli):
