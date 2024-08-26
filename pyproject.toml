@@ -1,9 +1,9 @@
 [project]
-name = "llm-cmd"
+name = "llm-cmds"
 version = "0.1a0"
-description = "Use LLM to generate and execute commands in your shell"
+description = "Fork of llm-cmd that also includes chain of thought reasoning, user environment context, and more"
 readme = "README.md"
-authors = [{name = "Simon Willison"}]
+authors = [{name = "fractalcounty"}]
 license = {text = "Apache-2.0"}
 classifiers = [
     "License :: OSI Approved :: Apache Software License"
@@ -15,13 +15,14 @@ dependencies = [
 ]
 
 [project.urls]
-Homepage = "https://github.com/simonw/llm-cmd"
-Changelog = "https://github.com/simonw/llm-cmd/releases"
-Issues = "https://github.com/simonw/llm-cmd/issues"
-CI = "https://github.com/simonw/llm-cmd/actions"
+Homepage = "https://github.com/fractalcounty/llm-cmds"
+Changelog = "https://github.com/fractalcounty/llm-cmds/releases"
+Issues = "https://github.com/fractalcounty/llm-cmds/issues"
+CI = "https://github.com/fractalcounty/llm-cmds/actions"
 
 [project.entry-points.llm]
-cmd = "llm_cmd"
+cmd = "llm_smart_cmd"
 
 [project.optional-dependencies]
 test = ["pytest"]
+
