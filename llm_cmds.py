@@ -32,9 +32,9 @@ def get_system_info():
     }
 
 SYSTEM_PROMPT = """
-You are a terminal command generator. Your task is to analyze context about the user's system as well as the user's request, briefly thinking through the steps required to fulfill the request and any assumptions made about it. Then, generate a command that will achieve the desired outcome.
+You are a terminal command generator. Your task is to analyze context about the user's system as well as the user's request, briefly thinking through the steps required to fulfill the request and any assumptions made about it all within a single paragraph. Then, generate a command that will achieve the desired outcome.
 
-Always provide both your thought processs and the final generated command in valid JSON format, separating your chain of thought reasoning from the command via two JSON keys: "thoughts" (will not be shown to the user) and "command" (contents will be passed to subprocess.check_output() directly). Ensure proper escaping of special characters, especially quotes. Use '\n' for multiline commands and whatnot.
+Always provide both your thought processs and the final generated command in valid JSON format, separating your chain of thought reasoning from the command via two JSON keys: "thoughts" (will not be shown to the user) and "command" (contents will be passed to subprocess.check_output() directly). Always provide your entire response in valid JSON format and ensure proper escaping of special characters, especially quotes. Use '\n' for multiline commands.
 
 If the request is ambiguous, make the safest assumption. If the command is likely to fail, dangerous, harmful, or unclear, include the command and/or an explanation via an echo command or similar.
 
@@ -103,17 +103,33 @@ def register_commands(cli):
             result = model_obj.prompt(json.dumps(prompt_data), system=system or SYSTEM_PROMPT)
 
             try:
-                parsed_result = json.loads(str(result))
+                sanitized_result = ''.join(char for char in str(result) if ord(char) >= 32)
+                sanitized_result = sanitized_result.replace('\n', '\\n').replace('\r', '\\r').replace('\t', '\\t')
+                parsed_result = json.loads(sanitized_result)
                 if think:
                     thoughts = parsed_result.get("thoughts", "No thoughts provided")
                 command = parsed_result.get("command", "")
                 if not command:
                     raise ValueError("No command provided in the LLM output")
-            except json.JSONDecodeError:
-                raise ValueError("Invalid JSON output from LLM")
+            except json.JSONDecodeError as e:
+                console.print(f"[bold red]JSON Decode Error:[/bold red] {str(e)}")
+                console.print(f"[bold yellow]Raw LLM output:[/bold yellow]\n{result}")
+                console.print(f"[bold yellow]Sanitized output:[/bold yellow]\n{sanitized_result}")
+
+                # Fallback: try to extract command using string manipulation
+                try:
+                    command_start = sanitized_result.index('"command"') + 10
+                    command_end = sanitized_result.index('"', command_start + 1)
+                    command = sanitized_result[command_start:command_end].strip()
+                    console.print(f"[bold green]Extracted command:[/bold green] {command}")
+                except ValueError:
+                    raise ValueError("Unable to extract command from LLM output")
+            except Exception as e:
+                console.print(f"[bold red]Unexpected Error:[/bold red] {str(e)}")
+                raise ValueError("Invalid output from LLM")
 
         if think:
-            console.print(Panel(thoughts, title="Thoughts", border_style="cyan"))
+            console.print(Panel(thoughts, title="Thoughts", border_style="green"))
         
         if command:
             interactive_exec(command)
