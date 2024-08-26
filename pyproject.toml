@@ -21,7 +21,7 @@ Issues = "https://github.com/fractalcounty/llm-cmds/issues"
 CI = "https://github.com/fractalcounty/llm-cmds/actions"
 
 [project.entry-points.llm]
-cmd = "llm_smart_cmd"
+cmd = "llm_cmds"
 
 [project.optional-dependencies]
 test = ["pytest"]
