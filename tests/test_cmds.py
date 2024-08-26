@@ -2,6 +2,7 @@ import pytest
 from click.testing import CliRunner
 from llm.plugins import pm
 from llm_cmds import register_commands
+from unittest.mock import patch, MagicMock
 import click
 
 @pytest.fixture
@@ -18,6 +19,6 @@ def test_plugin_is_installed():
 
 def test_cmd_command_exists(cli):
     runner = CliRunner()
-    result = runner.invoke(cli, ['cmd', '--help'])
+    result = runner.invoke(cli, ['cmds', '--help'])
     assert result.exit_code == 0
     assert 'Generate and execute commands in your shell' in result.output
