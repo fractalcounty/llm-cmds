@@ -24,5 +24,8 @@ CI = "https://github.com/fractalcounty/llm-cmds/actions"
 cmd = "llm_cmds"
 
 [project.optional-dependencies]
-test = ["pytest"]
+test = [
+    "pytest",
+    "pytest-mock",
+]
 
